@@ -293,10 +293,10 @@ class TorchDevice:
         return TorchTensor.create_from_torch(ids, self)
 
     def init_cache_one_gpu_batch(self, config, task, policy):
-        num_head, hidden_size, prompt_len, gen_len, gpu_batch_size = (
-            config.num_attention_heads, config.hidden_size, task.prompt_len, task.gen_len,
+        num_head, num_kv_heads, hidden_size, prompt_len, gen_len, gpu_batch_size = (
+            config.num_attention_heads, config.num_key_value_heads, config.hidden_size, task.prompt_len, task.gen_len,
             policy.gpu_batch_size)
-        shape = (prompt_len + gen_len - 1, gpu_batch_size * num_head, hidden_size // num_head)
+        shape = (prompt_len + gen_len - 1, gpu_batch_size * num_kv_heads, hidden_size // num_head)
         # NOTE: disable pin_memory due to high memory overhead
         pin_memory = False
         k_cache = self.allocate(shape, np.float16, pin_memory=pin_memory)
@@ -325,11 +325,11 @@ class TorchDevice:
         v = F.linear(hidden, w_v.data)
         # shape: (b, s, n_head, head_dim)
         q = q.view(b, s, n_head, head_dim)
-        k = k.view(b, s, n_kv_head, 1, head_dim)
-        v = v.view(b, s, n_kv_head, 1, head_dim)
+        key_ = k.view(b, s, n_kv_head, 1, head_dim)
+        value_ = v.view(b, s, n_kv_head, 1, head_dim)
         if n_kv_head != n_head:
-            k = k.expand(b, s, n_kv_head, n_head // n_kv_head, head_dim)
-            v = v.expand(b, s, n_kv_head, n_head // n_kv_head, head_dim)
+            k = key_.expand(b, s, n_kv_head, n_head // n_kv_head, head_dim)
+            v = value_.expand(b, s, n_kv_head, n_head // n_kv_head, head_dim)
             k = k.reshape(b, s, n_head, head_dim)
             v = v.reshape(b, s, n_head, head_dim)
 
@@ -366,8 +366,10 @@ class TorchDevice:
         if donate[1]: attention_mask.delete()
 
         # (s, b * n_head, head_dim)
-        k = k.permute(2, 0, 1)
-        v = v.permute(1, 0, 2)
+        # k = k.permute(2, 0, 1)
+        # v = v.permute(1, 0, 2)
+        k = key_.permute(1, 0, 2, 3, 4).reshape(s, b * n_kv_head, head_dim)
+        v = value_.permute(1, 0, 2, 3, 4).reshape(s, b * n_kv_head, head_dim)
 
         if compress_cache:
             k = self.compressed_device.compress(k, comp_config)
@@ -402,20 +404,20 @@ class TorchDevice:
         v = F.linear(hidden, w_v.data)
         # shape: (b, 1, n_head, head_dim)
         q = q.view(b, tgt_s, n_head, head_dim)
-        k = k.view(b, tgt_s, n_kv_head, 1, head_dim)
-        v = v.view(b, tgt_s, n_kv_head, 1, head_dim)
-        if n_kv_head != n_head:
-            k = k.expand(b, tgt_s, n_kv_head, n_head // n_kv_head, -1)
-            v = v.expand(b, tgt_s, n_kv_head, n_head // n_kv_head, -1)
-            k = k.reshape(b, tgt_s, n_head, head_dim)
-            v = v.reshape(b, tgt_s, n_head, head_dim)
+        k = k.view(b, tgt_s, n_kv_head, head_dim)
+        v = v.view(b, tgt_s, n_kv_head, head_dim)
+        # if n_kv_head != n_head:
+        #     k = k.expand(b, tgt_s, n_kv_head, n_head // n_kv_head, -1)
+        #     v = v.expand(b, tgt_s, n_kv_head, n_head // n_kv_head, -1)
+        #     k = k.reshape(b, tgt_s, n_head, head_dim)
+        #     v = v.reshape(b, tgt_s, n_head, head_dim)
 
         # shape: (b * n_head, 1, head_dim)
         q = q.permute(0, 2, 1, 3).reshape(b * n_head, tgt_s, head_dim)
         # shape: (1, b * n_head, head_dim)
-        k_new = k.permute(1, 0, 2, 3).reshape(tgt_s, b * n_head, head_dim)
+        k_new = k.permute(1, 0, 2, 3).reshape(tgt_s, b * n_kv_head, head_dim)
         # shape: (1, b * n_head, head_dim)
-        v_new = v.permute(1, 0, 2, 3).reshape(tgt_s, b * n_head, head_dim)
+        v_new = v.permute(1, 0, 2, 3).reshape(tgt_s, b * n_kv_head, head_dim)
 
         if isinstance(k_cache, TorchTensor):
             if attn_sparsity >= 1.0:  # Dense attention
@@ -429,6 +431,12 @@ class TorchDevice:
                     v = v_cache.data[:src_s]
                 k[src_s - 1:src_s] = k_new
                 v[src_s - 1:src_s] = v_new
+
+                if n_kv_head != n_head:
+                    k = k.unsqueeze(2).expand(src_s, b * n_kv_head, n_head // n_kv_head, head_dim)
+                    v = v.unsqueeze(2).expand(src_s, b * n_kv_head, n_head // n_kv_head, head_dim)
+                    k = k.reshape(src_s, b * n_head, head_dim)
+                    v = v.reshape(src_s, b * n_head, head_dim)
 
                 # shape: (b * n_head, head_dim, s)
                 k = k.permute(1, 2, 0).reshape(b * n_head, head_dim, src_s)
@@ -684,10 +692,10 @@ class TorchDisk:
             os.remove(tensor.data)
 
     def init_cache_one_gpu_batch(self, config, task, policy):
-        num_head, hidden_size, prompt_len, gen_len, gpu_batch_size = (
-            config.num_attention_heads, config.hidden_size, task.prompt_len, task.gen_len,
+        num_head, num_kv_heads, hidden_size, prompt_len, gen_len, gpu_batch_size = (
+            config.num_attention_heads, config.num_key_value_heads, config.hidden_size, task.prompt_len, task.gen_len,
             policy.gpu_batch_size)
-        shape = (prompt_len + gen_len - 1, gpu_batch_size * num_head, hidden_size // num_head)
+        shape = (prompt_len + gen_len - 1, gpu_batch_size * num_kv_heads, hidden_size // num_head)
         k_cache = self.allocate(shape, np.float16)
         v_cache = self.allocate(shape, np.float16)
         return k_cache, v_cache
@@ -758,7 +766,7 @@ class TorchMixedDevice:
         num_head, num_kv_head, hidden_size, prompt_len, gen_len, gpu_batch_size = (config.num_attention_heads,
             config.num_key_value_heads, config.hidden_size, task.prompt_len, task.gen_len,
             policy.gpu_batch_size)
-        shape = (prompt_len + gen_len - 1, gpu_batch_size * num_head, hidden_size // num_head)
+        shape = (prompt_len + gen_len - 1, gpu_batch_size * num_kv_head, hidden_size // num_head)
 
         # We have to round to a multiple of `num_head`
         if policy.cache_disk_percent == 0:

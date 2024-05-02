@@ -1229,14 +1229,14 @@ def model_bytes(config: MixtralConfig):
         config.vocab_size * (h + 1))
 
 def cache_bytes(config: MixtralConfig, batch_size, seq_len):
-    return 2 * batch_size * seq_len * config.num_hidden_layers * config.hidden_size * 2
+    return 2 * batch_size * seq_len * config.num_hidden_layers * (config.hidden_size //config.num_attention_heads) * config.num_key_value_heads * 2
 
 def hidden_bytes(config: MixtralConfig, batch_size, seq_len):
     return batch_size * seq_len * config.hidden_size * 2
 
 
 def run_flexgen(args):
-    print(f"<run_flexgen>: args.model: {args.model}")
+    print(f"<run_flexgen>: args.model: {args.model}, args.pin_weight: {args.pin_weight}, args.cpu_cache_compute, {args.cpu_cache_compute} ,args.overlap: {args.overlap}")
     if args.model == "facebook/galactica-30b":
         tokenizer = AutoTokenizer.from_pretrained("facebook/galactica-30b", padding_side="left")
     else:
@@ -1341,8 +1341,8 @@ def add_parser_arguments(parser):
              "FlexGen will automatically download them from HuggingFace.")
     parser.add_argument("--offload-dir", type=str, default="~/flexgen_offload_dir",
         help="The directory to offload tensors. ")
-    parser.add_argument("--prompt-len", type=int, default=75)
-    parser.add_argument("--gen-len", type=int, default=16)
+    parser.add_argument("--prompt-len", type=int, default=76)
+    parser.add_argument("--gen-len", type=int, default=32)
     parser.add_argument("--cut-gen-len", type=int,
         help="Cut generation length for fast debugging.")
     parser.add_argument("--debug-mode", type=str,
