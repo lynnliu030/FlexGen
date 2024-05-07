@@ -620,6 +620,8 @@ class MixtralLM:
         self.num_gpu_batches = policy.num_gpu_batches
         self.model_name = model_name
 
+        print(f"Number of hidden layers: {self.config.num_hidden_layers}. n_head: {self.config.num_attention_heads}. hiddne size: {self.config.hidden_size}. ")
+        print(f"Initializing layers")
         layers = []
         layers.append(InputEmbed(self.config, self.env, self.policy))
         for i in range(self.config.num_hidden_layers):
@@ -632,6 +634,7 @@ class MixtralLM:
         self.layers = layers
         self.num_layers = len(layers)
 
+        print(f"Initializing weights")
         if self.policy.act_gpu_percent == 100:
             self.act_home = self.env.gpu
         elif self.policy.act_cpu_percent == 100:
@@ -650,7 +653,8 @@ class MixtralLM:
         # The following buffers store values used
         # for the i-th token, j-th layer, k-th gpu batch.
         num_layers, num_gpu_batches = self.num_layers, self.policy.num_gpu_batches
-
+        
+        print(f"Initializing weights")
         # cache[j][k]
         self.cache_home = array_2d(num_layers, num_gpu_batches, ValueHolder)
         self.cache_read_buf = array_2d(num_layers, num_gpu_batches, ValueHolder)
@@ -824,7 +828,9 @@ class MixtralLM:
 
     def init_all_weights(self):
         self.weight_home = array_1d(self.num_layers, ValueHolder)
+        print(f"Total number of layers: {self.num_layers}")
         for j in range(self.num_layers):
+            print(f"Initializing weights for layer {j}")
             self.init_weight(j)
 
     def delete_all_weights(self):
@@ -1348,7 +1354,7 @@ def add_parser_arguments(parser):
     parser.add_argument("--debug-mode", type=str,
         choices=["fewer_batch", "breakdown"])
     parser.add_argument("--gpu-batch-size", type=int, default=4)
-    parser.add_argument("--num-gpu-batches", type=int, default=1)
+    parser.add_argument("--num-gpu-batches", type=int, default=1) 
     parser.add_argument("--percent", nargs="+", type=int,
         default=[100, 0, 100, 0, 100, 0],
         help="Six numbers. They are "

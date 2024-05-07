@@ -119,6 +119,14 @@ def get_opt_config(name, **kwargs):
             max_seq_len=2048, num_hidden_layers=24, n_head=96,
             hidden_size=12288, input_dim=12288, ffn_embed_dim=12288 * 4,
         )
+    # TODO: shu 
+    elif arch_name == "mixtral-8x7b-instruct-v0.1":
+        # NOTE: reference https://github.com/huggingface/transformers/blob/main/src/transformers/models/mixtral/configuration_mixtral.py
+        # Is this correct? 
+        config = OptConfig(name=name, 
+            max_seq_len=32768, num_hidden_layers=32, n_head=32, 
+            hidden_size=4096, input_dim=4096, ffn_embed_dim=4096 * 4,
+        )
     else:
         raise ValueError(f"Invalid model name: {name}")
 

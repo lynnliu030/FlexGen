@@ -67,24 +67,44 @@ class CostModelConfig:
     # hardware constants
     # default value aligned on google cloud T4 & L4
     # @shu
-    ctog_bdw: float = 15.281 * GB
-    gtoc_bdw_cache: float = 16 * GB
-    gtoc_bdw_hidden: float = 16 * GB
+    # ctog_bdw: float = 15.281 * GB
+    # gtoc_bdw_cache: float = 16 * GB
+    # gtoc_bdw_hidden: float = 16 * GB
 
-    dtoc_bdw: float = 24.457 * GB
-    ctod_bdw_cache_p: float = 4.89 * GB
-    ctod_bdw_hidden_p: float = 4.89 * GB
-    ctod_bdw_g: float = 4.89 * GB
+    # dtoc_bdw: float = 24.457 * GB
+    # ctod_bdw_cache_p: float = 4.89 * GB
+    # ctod_bdw_hidden_p: float = 4.89 * GB
+    # ctod_bdw_g: float = 4.89 * GB
 
-    mm_flops_p: float = 104 * T
-    mm_flops_g: float = 70 * T
-    bmm_flops_p: float = 31 * T
-    bmm_flops_g: float = 0.3 * T
-    cpu_flops: float = 2.8 * T
+    # mm_flops_p: float = 104 * T
+    # mm_flops_g: float = 70 * T
+    # bmm_flops_p: float = 31 * T
+    # bmm_flops_g: float = 0.3 * T
+    # cpu_flops: float = 2.8 * T
+    
+    ctog_bdw: float = 8.0392 * GB
+    gtoc_bdw_cache: float = 2.0151 * GB
+    gtoc_bdw_hidden: float = 2.0151 * GB
 
-    c1: float = 0.0168
-    c2: float = 0.0328
-    c3: float = 0.0621
+    dtoc_bdw: float = 2.0151 * GB
+    ctod_bdw_cache_p: float = 2.0151 * GB
+    ctod_bdw_hidden_p: float = 2.0151 * GB
+    ctod_bdw_g: float = 2.0151 * GB
+
+    mm_flops_p: float = 7.8485 * T
+    mm_flops_g: float = 0.9773 * T
+    bmm_flops_p: float = 3.3707 * T
+    bmm_flops_g: float = 0.8335 * T
+    cpu_flops: float = 0.0087 * T
+
+    # c1: float = 0.0168
+    # c2: float = 0.0328
+    # c3: float = 0.0621
+    
+    c1: float = 0
+    c2: float = 0.0034
+    c3: float = 0.0000
+
 
 
 def solve_lp(config, bls, gbs, compress_w=False, verbose=1, debug=False, percent=None):
