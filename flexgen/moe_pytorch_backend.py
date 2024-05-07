@@ -227,7 +227,7 @@ class TorchDevice:
             # We currently separate SelfAttention and MLP as two layers,
             # so we only need one workspace instead of two.
             for i in range(1 if policy.sep_layer else 2):
-                shape = (max_seq_len, b * n_head, head_dim)
+                shape = (max_seq_len, b * n_kv_head, head_dim)
                 k_cache = self.allocate(shape, np.float32, pin_memory=False)
                 v_cache = self.allocate(shape, np.float32, pin_memory=False)
                 self.attention_compute_workspace.append((k_cache, v_cache))
@@ -406,11 +406,6 @@ class TorchDevice:
         q = q.view(b, tgt_s, n_head, head_dim)
         k = k.view(b, tgt_s, n_kv_head, head_dim)
         v = v.view(b, tgt_s, n_kv_head, head_dim)
-        # if n_kv_head != n_head:
-        #     k = k.expand(b, tgt_s, n_kv_head, n_head // n_kv_head, -1)
-        #     v = v.expand(b, tgt_s, n_kv_head, n_head // n_kv_head, -1)
-        #     k = k.reshape(b, tgt_s, n_head, head_dim)
-        #     v = v.reshape(b, tgt_s, n_head, head_dim)
 
         # shape: (b * n_head, 1, head_dim)
         q = q.permute(0, 2, 1, 3).reshape(b * n_head, tgt_s, head_dim)
