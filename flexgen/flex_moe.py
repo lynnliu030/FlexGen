@@ -196,7 +196,8 @@ class InputEmbed:
 
     def load_weight(self, weight_home, weight_read_buf, k):
         w_token = weight_home.val[0]
-        print(type(w_token))
+        # print(type(w_token))
+        print(f"Type: {type(w_token)}, k: {k}")
         if k == 0:
             dst = self.weight_load_dst
             weight_read_buf.store((w_token.smart_copy(dst)))
@@ -617,7 +618,7 @@ class MixtralLM:
         self.num_gpu_batches = policy.num_gpu_batches
         self.model_name = model_name
 
-        print(f"Number of hidden layers: {self.config.num_hidden_layers}. n_head: {self.config.num_attention_heads}. hiddne size: {self.config.hidden_size}. ")
+        print(f"Number of hidden layers: {self.config.num_hidden_layers}. n_head: {self.config.num_attention_heads}. hidden size: {self.config.hidden_size}. ")
         print(f"Initializing layers")
         layers = []
         layers.append(InputEmbed(self.config, self.env, self.policy))

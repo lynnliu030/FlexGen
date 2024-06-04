@@ -9,7 +9,6 @@ from typing import Optional
 import json 
 from flexgen.timer import timers
 from flexgen.utils import GB 
-import numpy as np 
 
 def get_config(model: str, trust_remote_code: bool = True, revision: Optional[str] = None):
     config = AutoConfig.from_pretrained(
@@ -40,8 +39,29 @@ def main(args):
     env = ExecutionEnv(gpu=gpu, cpu=cpu, disk=disk, mixed=TorchMixedDevice([gpu, cpu, disk]))
     
     # TODO: fill in offloading policy 
-    # NOTE: update num_gpu_batches? one of the policy?
-    policy = Policy(len(prompts), 1,
+    # gpu_batch_size = len(prompts)
+    # num_gpu_batches = 1
+    
+    # Tokenizer 
+    print("Initialize...")
+    tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left")
+    tokenizer.pad_token = tokenizer.eos_token
+
+    # NOTE: MTBench inputs 
+    all_ids_without_padding = tokenizer(prompts, padding=False).input_ids
+    prompt_len = max(len(ids) for ids in all_ids_without_padding)
+    print(f"Max prompt_len: {prompt_len}")
+    inputs = tokenizer(prompts, padding='max_length', max_length=prompt_len)
+    input_ids = inputs.input_ids
+
+    # Test 
+    # TODO: correct? what if gpu_batch_size * num_gpu_batches != len(prompts)
+    gpu_batch_size = 1
+    # gpu_batch_size * num_gpu_batches = len(prompts)
+    num_gpu_batches = len(input_ids) // gpu_batch_size
+    print(f"gpu_batch_size: {gpu_batch_size}, num_gpu_batches: {num_gpu_batches}, len(prompts): {len(prompts)}")
+    
+    policy = Policy(gpu_batch_size, num_gpu_batches,
                     args.percent[0], args.percent[1],
                     args.percent[2], args.percent[3],
                     args.percent[4], args.percent[5],
@@ -54,49 +74,23 @@ def main(args):
                     comp_cache_config=CompressionConfig(num_bits=4, group_size=64,
                                       group_dim=2, symmetric=False))
     assert not (args.compress_cache), "Not implemented"
-
-    # Model
-    print("Initialize...")
-    tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left")
-    tokenizer.pad_token = tokenizer.eos_token
-
+    
     mixtral_config = get_config(args.model)
     mixtral_config.pad_token_id = tokenizer.pad_token_id
-    print("init weight...")
     model = MixtralLM(args.model, mixtral_config, env, args.path, policy)
-
-    # Start calling the model
     gen_len = args.gen_len
-    inputs = tokenizer(prompts, padding="max_length", 
-                           return_tensors="np",
-                           max_length=padding_max_length)
-    input_ids = inputs.input_ids
     
-    # TODO: batches with various sequence length
-    max_seq_len = max(np.sum(input_ids != tokenizer.pad_token_id, axis=1))
-    padding_max_length = max_seq_len
-    print(f"max_seq_len: {max_seq_len}")
-    
-    # Warmup 
-    print("Warmup - Generate...")
+    # Warmup + Actual Run 
     try:
-        warmup_inputs = tokenizer(prompts[:50], padding="max_length", 
-                                  return_tensors="np",
-                                  max_length=padding_max_length)
-        output_ids = model.generate(
-            warmup_inputs.input_ids,
-            temperature=0,
-            max_new_tokens=2)
+        # print("Warmup...")
+        # warmup_inputs = tokenizer(prompts, padding='max_length', max_length=prompt_len)
+        # output_ids = model.generate(
+        #     warmup_inputs.input_ids,
+        #     temperature=0,
+        #     max_new_tokens=2)
+        # outputs = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
         
-        outputs = tokenizer.batch_decode(output_ids, skip_special_tokens=True)
-    finally: 
-        # Shutdown
-        print("Shutdown...")
-        env.close_copy_threads()
-        
-    # Actual Run 
-    print("Benchmark - generate...")
-    try:
+        print("Benchmark - Generate...")
         timers("generate").reset()
         output_ids = model.generate(
             input_ids,
@@ -108,7 +102,6 @@ def main(args):
         print("logging...")
         num_prompts = len(prompts)
         # TODO: propmt length takes the max padding length 
-        prompt_len = 128 
         cache_size = cache_bytes(mixtral_config, num_prompts, prompt_len + gen_len)
         hidden_size = hidden_bytes(mixtral_config, num_prompts, prompt_len + gen_len)
         
@@ -142,6 +135,8 @@ def main(args):
                f"total throughput: {total_throughput:.3f} token/s")
         
         print(log_str)
+    except Exception as e:
+        print(f"Error: {e}")
     finally: 
         # Shutdown
         print("Shutdown...")
