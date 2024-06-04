@@ -6,8 +6,6 @@ python3 -m flexgen.flex_moe --model facebook/opt-1.3b --gpu-batch-size 32 --perc
 import argparse
 import dataclasses
 import os
-import pickle
-import time
 from typing import Union, List, Optional
 
 import numpy as np
@@ -15,15 +13,14 @@ from tqdm import tqdm
 import torch
 from transformers import AutoTokenizer, MixtralConfig, AutoConfig
 
-from flexgen.compression import CompressionConfig
+from flexgen.compression import CompressionConfig 
 from flexgen.moe_config import download_weights
-from flexgen.moe_pytorch_backend import (TorchDevice, TorchDisk, TorchLink,
+from flexgen.moe_pytorch_backend import (TorchDevice, TorchDisk, 
     TorchMixedDevice, DeviceType, general_copy, fix_recursive_import)
 from flexgen.timer import timers
-from flexgen.utils import (Task, ExecutionEnv, GB, T, ValueHolder,
+from flexgen.utils import (Task, ExecutionEnv, GB, ValueHolder,
     array_1d, array_2d, array_3d, str2bool, project_decode_latency,
-    torch_mem_stats, torch_dtype_to_np_dtype, write_benchmark_log,
-    read_benchmark_log)
+    torch_dtype_to_np_dtype, write_benchmark_log)
 
 fix_recursive_import()
 

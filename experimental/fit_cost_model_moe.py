@@ -124,6 +124,18 @@ class CostModel(nn.Module):
                                      torch.maximum(ctodg, compg)))
         return torch.cat([tpre * l, tgen * (n - 1) * l], dim=1)
 
+import re
+
+def parse_filename(filename):
+    pattern = r"fo-v0.1-gbs(\d+)-ngbs(\d+)-prompt(\d+)-gen(\d+)-percent-.*\.log"
+    match = re.match(pattern, filename)
+    if match:
+        gbs = int(match.group(1))
+        bls = int(match.group(2))
+        prompt_length = int(match.group(3))
+        gen_length = int(match.group(4))
+        return gbs, bls, prompt_length, gen_length
+    return None
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -138,33 +150,38 @@ if __name__ == "__main__":
     optimizer = torch.optim.Adam(model.parameters(), lr=7e-3)
 
     dataset = []
-    for suite in ["mixtral-8x7b"]:
-        cases = suites[suite]
-        for case in cases:
-            # Load from .log from /home/cusgadmin/FlexGen
-            filename = get_filename(case)
-            print(f"For case {case}, file name: {filename}")
-            
-            try: 
-                with open(f"/home/cusgadmin/FlexGen/{filename}", "r") as f:
+    dataset = []
+    log_directory = "/home/cusgadmin/FlexGen"  # directory containing the log files
+
+    filenames = [f for f in os.listdir(log_directory) if f.endswith('.log')]
+
+    dataset = []
+    for filename in filenames:
+        match = re.match(r"fo-v0\.1-gbs(\d+)-ngbs(\d+)-prompt(\d+)-gen(\d+)-percent-(\d+)-(\d+)-(\d+)-(\d+)-(\d+)-(\d+)-(.+?)\.log", filename)
+        if match:
+            gbs, bls, prompt_length, gen_length, wg, wc, cg, cc, hg, hc = map(int, match.groups()[:10])
+            case_name = match.group(11)
+
+            # Constructing stats directly from filename
+            stats = {'gbs': gbs, 'bls': bls, 'prompt_len': prompt_length, 'gen_len': gen_length,
+                     'percent': (wg, wc, cg, cc, hg, hc)}
+
+            try:
+                with open(os.path.join(log_directory, filename), "r") as f:
                     lines = f.readlines()
-                    stats = {}
                     for line in lines:
-                        if ':' in line:  
-                            parts = line.split(":", 1)  # Split only on the first colon
-                            key = parts[0].strip()
-                            value = parts[1].strip().split()[0]  
-                            stats[key] = float(value)
-                            
-                prefill_latency = stats['prefill latency']
-                decode_latency = stats['decode latency']
+                        if ':' in line:
+                            key, value = line.split(":", 1)
+                            stats[key.strip()] = float(value.split()[0])
             except FileNotFoundError:
-                # manually assign some random prefill and decode latency
-                prefill_latency = 18.7
-                decode_latency = 320.8
-                
-            s = case.prompt_len
-            n = case.gen_len
+                # Handling file not found, if necessary
+                continue 
+            
+            prefill_latency = stats.get('prefill latency') 
+            decode_latency = stats.get('decode latency') 
+            
+            s = prompt_length
+            n = gen_length
             moe_config = get_config(model_name)
             # moe_config = get_moe_config(case.model_name)
             l = moe_config.num_hidden_layers
@@ -178,9 +195,6 @@ if __name__ == "__main__":
             # NOTE: this is updated to fit moe in cost model 
             wi = 4 * h1 ** 2 + 4 * h1 ** 2 // num_kv_group + 6 * h1 * h2 * ne
             
-            gbs = case.gbs
-            bls = case.bls
-            wg, wc, cg, cc, hg, hc = case.percent
             wn = 100 - wg - wc
             cn = 100 - cg - cc
             hn = 100 - hg - hc

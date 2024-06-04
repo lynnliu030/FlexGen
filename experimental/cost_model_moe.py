@@ -59,30 +59,11 @@ class CostModelConfig:
 
     n_experts: int = 8
 
-    # @shu
     gmem: int = 15 * GB
     cmem: int = 204 * GB
     nmem: int = 1500 * GB
-
-    # hardware constants
-    # default value aligned on google cloud T4 & L4
-    # @shu
-    # ctog_bdw: float = 15.281 * GB
-    # gtoc_bdw_cache: float = 16 * GB
-    # gtoc_bdw_hidden: float = 16 * GB
-
-    # dtoc_bdw: float = 24.457 * GB
-    # ctod_bdw_cache_p: float = 4.89 * GB
-    # ctod_bdw_hidden_p: float = 4.89 * GB
-    # ctod_bdw_g: float = 4.89 * GB
-
-    # mm_flops_p: float = 104 * T
-    # mm_flops_g: float = 70 * T
-    # bmm_flops_p: float = 31 * T
-    # bmm_flops_g: float = 0.3 * T
-    # cpu_flops: float = 2.8 * T
     
-    ctog_bdw: float = 8.0392 * GB
+    ctog_bdw: float = 5.3526 * GB
     gtoc_bdw_cache: float = 2.0151 * GB
     gtoc_bdw_hidden: float = 2.0151 * GB
 
@@ -91,18 +72,20 @@ class CostModelConfig:
     ctod_bdw_hidden_p: float = 2.0151 * GB
     ctod_bdw_g: float = 2.0151 * GB
 
-    mm_flops_p: float = 7.8485 * T
-    mm_flops_g: float = 0.9773 * T
-    bmm_flops_p: float = 3.3707 * T
-    bmm_flops_g: float = 0.8335 * T
-    cpu_flops: float = 0.0087 * T
+    # mm_flops_p: float = 7.8485 * T
+    # mm_flops_g: float = 0.9773 * T
+    # bmm_flops_p: float = 3.3707 * T
+    # bmm_flops_g: float = 0.8335 * T
+    # cpu_flops: float = 0.0087 * T
 
-    # c1: float = 0.0168
-    # c2: float = 0.0328
-    # c3: float = 0.0621
+    mm_flops_p: float = 6.8304 * T
+    mm_flops_g: float = 1.7186 * T
+    bmm_flops_p: float = 1.2977 * T
+    bmm_flops_g: float = 0.9039 * T
+    cpu_flops: float = 4.4984 * T
     
-    c1: float = 0
-    c2: float = 0.0034
+    c1: float = 0.0000
+    c2: float = 0.0069 # 0.0034 
     c3: float = 0.0000
 
 
@@ -274,8 +257,8 @@ def solve_lp(config, bls, gbs, compress_w=False, verbose=1, debug=False, percent
     # compg = gpu_compg + cpu_compg
     # non-linear cpu_flops
     cpu_flops_real = cpu_flops * np.maximum(0.1,
-            1 + c1 * (max(0, math.log2(64 / gbs)) * max(0, math.log2(4096 / h1)))
-            - c2 * max(0, math.log2(64 / gbs))
+            1 + c1 * (max(0, math.log2(256 / gbs)) * max(0, math.log2(4096 / h1)))
+            - c2 * max(0, math.log2(256 / gbs))
             - c3 * max(0, math.log2(4096 / h1)))
     prob += compg == (1 / mm_flops_g) * bls * (4 * h1 ** 2 + 4 * h1 * h_kv + 6 * h1 * h2) \
                      + (1 / bmm_flops_g) * 4 * bls * (s + n / 2) * h1 * cg \
@@ -562,7 +545,7 @@ def solve(config, solve_lp, args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--model", type=str, default="facebook/opt-175b")
-    parser.add_argument("--prompt-len", type=int, default=512)
+    parser.add_argument("--prompt-len", type=int, default=256)
     parser.add_argument("--gen-len", type=int, default=32)
     parser.add_argument("--gpu-mem", type=int, default=15)
     parser.add_argument("--cpu-mem", type=int, default=200)
