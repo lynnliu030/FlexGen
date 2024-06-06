@@ -816,6 +816,9 @@ class MixtralLM:
         # Clear the weight_read_buf if it is the last gpu batch
         # Clear the cache_read_buf
         # Run layer computation
+        if k % 10 == 0:
+            print(f"Compute layer {j}, batch {k}", flush=True)
+            
         self.layers[j].forward(self.hidden[i][j][k], self.cache_read_buf[j][k],
             self.weight_read_buf[j], self.attention_mask[k],
             self.cache_write_buf[j][k], i, k)
@@ -828,7 +831,7 @@ class MixtralLM:
         self.weight_home = array_1d(self.num_layers, ValueHolder)
         print(f"Total number of layers: {self.num_layers}")
         for j in range(self.num_layers):
-            print(f"Initializing weights for layer {j}")
+            print(f"Initializing weights for layer {j}", flush=True)
             self.init_weight(j)
 
     def delete_all_weights(self):

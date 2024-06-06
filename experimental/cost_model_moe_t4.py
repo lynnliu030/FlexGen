@@ -60,15 +60,14 @@ class CostModelConfig:
     n_experts: int = 8
 
     # 15 * 204??
-    gmem: int = 15 * GB
-    cmem: int = 200 * GB
+    gmem: int = 16 * GB
+    cmem: int = 192 * GB
     nmem: int = 0 * GB
     
     ctog_bdw: float = 5.4299 * GB
     gtoc_bdw_cache: float = 2.0151 * GB
     gtoc_bdw_hidden: float = 2.0151 * GB
 
-    # TODO: differ than FlexGen default value for GCP T4
     dtoc_bdw: float = 2.0151 * GB
     ctod_bdw_cache_p: float = 2.0151 * GB
     ctod_bdw_hidden_p: float = 2.0151 * GB
@@ -575,8 +574,8 @@ if __name__ == "__main__":
     parser.add_argument("--model", type=str, default="mistralai/Mixtral-8x7B-Instruct-v0.1")
     parser.add_argument("--prompt-len", type=int, default=512)
     parser.add_argument("--gen-len", type=int, default=32)
-    parser.add_argument("--gpu-mem", type=int, default=15)
-    parser.add_argument("--cpu-mem", type=int, default=200)
+    parser.add_argument("--gpu-mem", type=int, default=16)
+    parser.add_argument("--cpu-mem", type=int, default=192)
     parser.add_argument("--nvme-mem", type=int, default=0)
     
     parser.add_argument("--gbs", "--gpu-batch-size", type=int)
