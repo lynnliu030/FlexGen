@@ -25,7 +25,6 @@ def load_questions(filename):
         return questions
     
 def main(args):
-    # TODO: correct? 
     gpu_batch_size = args.gbs
     num_gpu_batches = args.num_gb
     length_of_inputs = gpu_batch_size * num_gpu_batches
@@ -101,7 +100,6 @@ def main(args):
         
         # Log output 
         print("logging...")
-        # num_prompts = len(prompts) ??
         
         num_prompts = len(input_ids)
         # TODO: propmt length takes the max padding length 

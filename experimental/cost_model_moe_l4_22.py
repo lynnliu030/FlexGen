@@ -60,8 +60,8 @@ class CostModelConfig:
     n_experts: int = 8
 
     # 15 * 204??
-    gmem: int = 15 * GB
-    cmem: int = 200 * GB
+    gmem: int = 24 * GB
+    cmem: int = 192 * GB
     nmem: int = 0 * GB
     
     ctog_bdw: float = 5.4299 * GB
