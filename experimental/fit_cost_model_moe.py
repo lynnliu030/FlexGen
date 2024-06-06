@@ -150,7 +150,6 @@ if __name__ == "__main__":
     optimizer = torch.optim.Adam(model.parameters(), lr=7e-3)
 
     dataset = []
-    dataset = []
     log_directory = "/home/cusgadmin/FlexGen"  # directory containing the log files
 
     filenames = [f for f in os.listdir(log_directory) if f.endswith('.log')]
