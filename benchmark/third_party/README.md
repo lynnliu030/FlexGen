@@ -23,6 +23,16 @@ pip3 install -e .
 # DS_BUILD_AIO=1 pip3 install -e .
 ```
 
+### Note (MoE)
+```bash 
+cd FlexGen/benchmark/third_party/latest_deepspeed/DeepSpeed
+pip3 install -e .
+
+# (Optional) build asyncio ops
+# sudo apt install libaio-dev gcc-multilib
+# DS_BUILD_AIO=1 pip3 install -e .
+```
+
 ### PagecacheManagement
 ```bash
 cd FlexGen/third_party/pagecache-mangagement/trunk

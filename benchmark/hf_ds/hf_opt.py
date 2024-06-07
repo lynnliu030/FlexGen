@@ -256,18 +256,25 @@ def run_generation(model_name, batch_size, prompt_len, gen_len, cut_gen_len,
                           max_length=prompt_len).input_ids.cuda()
 
     # Warmup
-    print("wamup")
+    print("warmup")
     generate_kwargs_warmup = dict(max_new_tokens=1, do_sample=False)
     with torch.no_grad():
+        timers("warmup").reset()
         output_ids = model.generate(input_ids=input_ids, **generate_kwargs_warmup)
+        costs = timers("warmup").costs
+        print(f"Warm up costs: {costs}")
 
     # Run
     print("benchmark")
-    timers("generate-forward").reset()
+    
+    print(f"Generation length: {gen_len}")
+    print(f"Input ids: {input_ids.shape}")
     generate_kwargs = dict(max_new_tokens=execute_gen_len, do_sample=False)
     with torch.no_grad():
+        timers("generate").reset()
         output_ids = model.generate(input_ids=input_ids, **generate_kwargs)
-    costs = timers("generate-forward").costs
+        costs = timers("generate").costs
+        print(f"costs: {costs}")
 
     if use_deepspeed and args.local_rank != 0:
         return

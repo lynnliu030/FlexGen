@@ -11,6 +11,17 @@ Install dependencies:
 sudo apt-get install libaio-dev
 ```
 
+### MoE Note 
+The updated DeepSpeed fork is in `/latest_deepspeed`. Use MoE instruction in [guide](../third_party/README.md).
+```
+# Install updated dependency 
+pip3 install accelerate==0.21.0 
+```
+Install dependencies:
+```
+sudo apt-get install libaio-dev
+```
+
 ## Run one case
 
 ### HuggingFace Accelerate
