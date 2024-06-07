@@ -3,7 +3,7 @@ import argparse
 
 from flexgen.flex_opt import (Policy, OptLM, ExecutionEnv, CompressionConfig,
         str2bool)
-from transformers import AutoTokenizer
+from transformers import AutoTokenizer 
 
 
 def main(args):

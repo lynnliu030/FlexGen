@@ -23,6 +23,13 @@ flexgen/apps/data_wrangle/data
 flexgen/apps/data_wrangle/outputs
 flexgen/apps/data_wrangle/core
 
+experimental/mmlu/benchmark_output
+experimental/mmlu/data
+experimental/mmlu/outputs
+experimental/mmlu/core
+experimental/mmlu/runs 
+experimental/mmlu/data
+
 # pickle
 *.pkl
 

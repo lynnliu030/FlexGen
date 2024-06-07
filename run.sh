@@ -3,7 +3,7 @@
 # GPU / CPU: weight, attention cache, activations
 declare -a percents=(
     "0 100 0 100 0 100"
-    "15 85 0 100 0 100"
+    # "15 85 0 100 0 100"
     # "0 100 0 100 0 100"
     # "50 50 0 100 0 100"
     # "4 96 0 100 0 100"
@@ -12,22 +12,22 @@ declare -a percents=(
 
 declare -a num_gpu_batch=(
     "3"
-    "8"
-    "12"
+    # "8"
+    # "12"
 )
 
 declare -a gpu_batch_size=(
     # "32"
     "48"
-    "64"
-    "128"
-    "256"
+    # "64"
+    # "128"
+    # "256"
 )
 
 declare -a prompt_len=(
     "76"
-    "256"
-    "512"
+    # "256"
+    # "512"
 )
 
 declare -a cpu_cache_compute=(

@@ -25,8 +25,12 @@ def load_questions(filename):
         return questions
     
 def main(args):
+    gpu_batch_size = args.gbs
+    num_gpu_batches = args.num_gb
+    length_of_inputs = gpu_batch_size * num_gpu_batches
+    
     # Prompts
-    questions = load_questions("./mtbench/question.jsonl")
+    questions = load_questions("./question.jsonl")
     prompts = []
     for i in range(61):
         for question in questions:
@@ -38,10 +42,6 @@ def main(args):
     disk = TorchDisk(args.offload_dir)
     env = ExecutionEnv(gpu=gpu, cpu=cpu, disk=disk, mixed=TorchMixedDevice([gpu, cpu, disk]))
     
-    # TODO: fill in offloading policy 
-    # gpu_batch_size = len(prompts)
-    # num_gpu_batches = 1
-    
     # Tokenizer 
     print("Initialize...")
     tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left")
@@ -52,20 +52,20 @@ def main(args):
     prompt_len = max(len(ids) for ids in all_ids_without_padding)
     print(f"Max prompt_len: {prompt_len}")
     inputs = tokenizer(prompts, padding='max_length', max_length=prompt_len)
-    input_ids = inputs.input_ids
+    input_ids = inputs.input_ids 
+    print(f"Number of prompts: {len(prompts)}, number of input ids: {len(input_ids)}")
+    
+    # Shrink inputs to length_of_inputs
+    input_ids = input_ids[:length_of_inputs]
 
-    # Test 
-    # TODO: correct? what if gpu_batch_size * num_gpu_batches != len(prompts)
-    gpu_batch_size = 1
-    # gpu_batch_size * num_gpu_batches = len(prompts)
-    num_gpu_batches = len(input_ids) // gpu_batch_size
-    print(f"gpu_batch_size: {gpu_batch_size}, num_gpu_batches: {num_gpu_batches}, len(prompts): {len(prompts)}")
+    print(f"gpu_batch_sizenun: {gpu_batch_size}, num_gpu_batches: {num_gpu_batches}, len(prompts): {len(input_ids)}")
     
     policy = Policy(gpu_batch_size, num_gpu_batches,
                     args.percent[0], args.percent[1],
                     args.percent[2], args.percent[3],
                     args.percent[4], args.percent[5],
-                    overlap=True, sep_layer=True, pin_weight=args.pin_weight,
+                    # NOTE: sep_layer all set to False in the policy, same as pin_weight
+                    overlap=True, sep_layer=True, pin_weight=False,
                     cpu_cache_compute=args.cpu_cache_compute, attn_sparsity=1.0,
                     compress_weight=args.compress_weight,
                     comp_weight_config=CompressionConfig(num_bits=4, group_size=64,
@@ -100,7 +100,8 @@ def main(args):
         
         # Log output 
         print("logging...")
-        num_prompts = len(prompts)
+        
+        num_prompts = len(input_ids)
         # TODO: propmt length takes the max padding length 
         cache_size = cache_bytes(mixtral_config, num_prompts, prompt_len + gen_len)
         hidden_size = hidden_bytes(mixtral_config, num_prompts, prompt_len + gen_len)
@@ -146,6 +147,8 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--gen-len", type=int, default=32)
+    parser.add_argument("--gbs", "--gpu-batch-size", type=int)
+    parser.add_argument("--num-gb", "--num-gpu-batches", type=int)
     parser.add_argument("--model", type=str, default="mistralai/Mixtral-8x7B-Instruct-v0.1",
         help="The model name.")
     parser.add_argument("--path", type=str, default="~/opt_weights",
@@ -162,8 +165,10 @@ if __name__ == "__main__":
          "the percentage of attention cache on CPU, "
          "the percentage of activations on GPU, "
          "the percentage of activations on CPU")
+    
+    # TODO: originally False but all results are True 
     parser.add_argument("--pin-weight", type=str2bool, nargs="?",
-        const=True, default=True)
+        const=True, default=False)
     parser.add_argument("--cpu-cache-compute", action="store_true")
     parser.add_argument("--compress-weight", action="store_true",
         help="Whether to compress weight.")
