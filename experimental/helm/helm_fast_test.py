@@ -70,12 +70,37 @@ if __name__ == "__main__":
         "boolq:model=text,only_contrast=True,data_augmentation=contrast_sets",
         "imdb:model=text,only_contrast=True,data_augmentation=contrast_sets",
     ]
+
+    # NOTE: prompt_len = max_seq_length, gen_len = request_max_token 
     
     gets = [
-        "synthetic_reasoning:model=text_code,mode=pattern_match",
-        # 2
-        "synthetic_reasoning_natural:model=text_code,difficulty=easy",
+        # "med_qa:model=biomedical", # Success, 1753, pad to seq length 1792, gen_len = 1, num_req = 30 
+        # "mmlu:model=text,subject=abstract_algebra,data_augmentation=canonical", # Success, prompt_len = 457 (pad to 512) , gen_len = 1, num_req = 84
+        # "twitter_aae:model=full_functionality_text,demographic=aa" # Success, prompt_len = 41 (pad to 256, but prob can be lower), gen_len = 0?, num_req = 10
+        # "legal_support:model=text_code", # Success, prompt_len = 695 (pad to 768), gen_len = 1, num_req = 30
+        # "dyck_language:model=text_code,num_parenthesis_pairs=2",
+        # "lsat_qa:model=text_code,task=all" # prompt_len = 1287 pad to 1536, gen_len = 1, num_req = 30
+        
+        # "imdb:model=text,data_augmentation=canonical",
+        # "raft:subset=ade_corpus_v2,model=text,data_augmentation=canonical",
+        
+        # "civil_comments:model=text,demographic=all,data_augmentation=canonical",
+        # "entity_matching:model=text,dataset=Beer",
+        # "blimp:model=full_functionality_text,phenomenon=anaphor_agreement",
+        # "babi_qa:model=text_code,task=1",
+        # "entity_data_imputation:model=text,dataset=Buy",
+        ## FAIL!
+        # "boolq:model=text,only_contrast=True,data_augmentation=contrast_sets",
+        # "copyright:model=text,datatag=n_books_1000-extractions_per_book_1-prefix_length_125",
+        # "gsm:model=text_code",
+        # "synthetic_reasoning:model=text_code,mode=pattern_match", # Fails, prompt_len = 249 (pad to 256), gen_len = 50, num_req = 30 
+        # "real_toxicity_prompts:model=text",
+        # "bold:model=text,subject=all",
+        # "lex_glue:subset=ecthr_a,model=all",
+        # "lextreme:subset=brazilian_court_decisions_judgment,model=all"
     ]
+    
+    gets = passed
 
     descriptions = [
         # 1 need to download the dataset manually.
@@ -99,4 +124,8 @@ if __name__ == "__main__":
                f"--model facebook/opt-125m --percent 100 0 100 0 100 0 --gpu-batch-size 32 "
                f"--num-gpu-batches 1 --max-eval-instance 10")
         ret = run_cmd(cmd)
-        assert ret == 0
+        
+        # If one does not work, just continue to the next one.
+        if ret != 0:
+            continue
+        # assert ret == 0

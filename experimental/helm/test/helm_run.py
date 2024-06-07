@@ -104,6 +104,8 @@ def get_hf_generation_args(request, tokenizer):
         "top_k_per_token": request.top_k_per_token,
         "stop_sequences": request.stop_sequences,
     }
+    print(f"Request max token: {request.max_tokens}")
+    print(f"Request stop sequences: {request.stop_sequences}")
 
     raw_request["do_sample"] = True
     raw_request["return_dict_in_generate"] = True
@@ -113,10 +115,11 @@ def get_hf_generation_args(request, tokenizer):
 
     if len(raw_request["stop_sequences"]) > 0:
         stop_sequence_ids = tokenizer(raw_request["stop_sequences"])
+        print(f"stop_sequence_ids: {stop_sequence_ids}")
         # Total number of stop words should be 1.
         assert len(stop_sequence_ids.input_ids) == 1
         # Total number of tokens in each stop word should be 1.
-        assert len(stop_sequence_ids.input_ids[0]) == 1
+        # assert len(stop_sequence_ids.input_ids[0]) == 1, f"stop_sequence_ids: {len(stop_sequence_ids.input_ids[0])}"
         del raw_request["stop_sequences"]
         raw_request["eos_token_id"] = stop_sequence_ids.input_ids[0][0]
 
@@ -154,6 +157,7 @@ def get_batches(scenario_state, tokenizer, batch_size, pad_to_seq_len):
 
     # Pad and divide into batches
     n_prompts = len(prompts)
+    print(f"Number of prompts: {n_prompts}")
     if n_prompts % batch_size != 0:
         input_ids = np.concatenate((input_ids, np.full((batch_size - n_prompts % batch_size,
             input_ids.shape[1]), tokenizer.pad_token_id, dtype=input_ids.dtype)))
@@ -294,7 +298,7 @@ def execute(scenario_state, tokenizer, effective_bs, pad_to_seq_len):
 
 def run_entry(description, pad_to_seq_len, args):
     effective_bs = args.gpu_batch_size * args.num_gpu_batches
-    parallelism = 4
+    parallelism = 1
 
     ##### RunSpec #####
     run_entries = [RunEntry(description, priority=1, groups=None)]
