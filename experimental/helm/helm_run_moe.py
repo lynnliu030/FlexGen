@@ -36,6 +36,9 @@ from tqdm import tqdm
 from transformers import AutoTokenizer, AutoConfig
 
 
+
+    
+
 class OptTokenizer:
     # Adapted from helm/proxy/clients/huggingface_client.py
 
@@ -116,15 +119,18 @@ def get_hf_generation_args(request, tokenizer):
     raw_request["output_scores"] = True
     top_k_per_token: int = raw_request["top_k_per_token"]
     del raw_request["top_k_per_token"]
-
+    
     if len(raw_request["stop_sequences"]) > 0:
         stop_sequence_ids = tokenizer(raw_request["stop_sequences"])
         # Total number of stop words should be 1.
         assert len(stop_sequence_ids.input_ids) == 1
-        # Total number of tokens in each stop word should be 1.
-        assert len(stop_sequence_ids.input_ids[0]) == 1
+        
+        # NOTE: remove this - Total number of tokens in each stop word should be 1.
+        # assert len(stop_sequence_ids.input_ids[0]) == 1, f"Input ids: {stop_sequence_ids.input_ids[0]}, length: {len(stop_sequence_ids.input_ids[0])}"
         del raw_request["stop_sequences"]
-        raw_request["eos_token_id"] = stop_sequence_ids.input_ids[0][0]
+        
+        if len(stop_sequence_ids.input_ids[0]) == 1:
+            raw_request["eos_token_id"] = stop_sequence_ids.input_ids[0][0]
 
     # Strip out irrelevant parameters
     relevant_raw_request = {
@@ -234,6 +240,8 @@ def execute(scenario_state, tokenizer, effective_bs, pad_to_seq_len):
     tic = time.time()
     input_ids_batches = []
     output_ids_batches = []
+
+    print(f"Setting: do_sample: {generation_args['do_sample']}, temperature: {generation_args['temperature']}, max_new_tokens: {generation_args['max_new_tokens']}")
     
     for batch in tqdm(batches):
         input_ids_tmp = batch["input_ids"]
@@ -241,11 +249,10 @@ def execute(scenario_state, tokenizer, effective_bs, pad_to_seq_len):
         output_ids_tmp = model.generate(
             input_ids_tmp,
             do_sample=generation_args["do_sample"],
-            temperature=0,
-            max_new_tokens=args.gen_len,
-            # max_new_tokens=generation_args["max_new_tokens"],
-            stop=generation_args.get("eos_token_id", None)
-            )
+            temperature=generation_args["temperature"],
+            max_new_tokens=generation_args["max_new_tokens"],
+            # stop=generation_args.get("eos_token_id", None), # NOTE: disable eos_token_id
+        )
         costs = timers("generate").costs
         input_ids_batches.append(input_ids_tmp)
         output_ids_batches.append(output_ids_tmp)
@@ -253,7 +260,7 @@ def execute(scenario_state, tokenizer, effective_bs, pad_to_seq_len):
 
     num_prompts = effective_bs 
     prompt_len = pad_to_seq_len
-    gen_len = args.gen_len 
+    gen_len = generation_args["max_new_tokens"]
     cache_size = cache_bytes(mixtral_config, num_prompts, prompt_len + gen_len)
     hidden_size = hidden_bytes(mixtral_config, num_prompts, prompt_len + gen_len)
     
