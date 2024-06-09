@@ -460,7 +460,6 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--description", type=str, required=True)
-    parser.add_argument("--gen-len", type=int, default=32)
     parser.add_argument("--pad-to-seq-len", type=int)
     parser.add_argument("--model", type=str, default="mistralai/Mixtral-8x7B-Instruct-v0.1",
         help="The model name.")
