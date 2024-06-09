@@ -1,1 +1,1 @@
-python3 helm_run_moe.py --description synthetic_reasoning:model=together/opt-175b,mode=pattern_match --pad-to-seq-len 256 --gen-len 50 --percent 0 100 0 100 0 100 --gpu-batch-size 1 --num-gpu-batches 5 --cpu-cache-compute
+python3 helm_run_moe.py --description synthetic_reasoning:model=text,mode=pattern_match --gen-len 50 --percent 0 100 0 100 0 100 --gpu-batch-size 1 --num-gpu-batches 5 --cpu-cache-compute

@@ -45,9 +45,9 @@ class OptTokenizer:
     def __init__(self, name):
         self.tokenizer = AutoTokenizer.from_pretrained(name, padding_side="left")
         self.tokenizer.add_bos_token = False
-        
-        # TODO: adapt from mtbench run? shall we add this or not?
-        # self.tokenizer.pad_token = self.tokenizer.eos_token
+
+        # NOTE: adapt from MTBench run 
+        self.tokenizer.pad_token = self.tokenizer.eos_token
         
         if 'galactica' in name:
             config = AutoConfig.from_pretrained(name)
@@ -145,10 +145,13 @@ def get_hf_generation_args(request, tokenizer):
 
 def get_batches(scenario_state, tokenizer, batch_size, pad_to_seq_len):
     prompts = []
-    # NOTE: manual repeating the prompts 
-    for i in range(6):
+    # NOTE: manual repeating the prompts until around 3000 or so 
+    while len(prompts) < 3000:
         for r in scenario_state.request_states:
             prompts.append(r.request.prompt)
+            
+            if len(prompts) >= 3000:
+                break
 
     # Tokenize
     print(f"Number of propmts: {len(prompts)}")
@@ -165,27 +168,14 @@ def get_batches(scenario_state, tokenizer, batch_size, pad_to_seq_len):
         assert len(input_ids.shape) == 2, f"Auto-adjusting pad_to_seq_len failed. current = {pad_to_seq_len}"
         max_seq_len = max(np.sum(input_ids != tokenizer.pad_token_id, axis=1))
 
-    print(f"Max sequence length: {max_seq_len}, Pad to sequences length: {pad_to_seq_len}")
+    print(f"\nREAL (ULTIMATE): Max sequence length: {max_seq_len}, Pad to sequences length: {pad_to_seq_len}")
 
     # Just take n_prompts = batch_size, run one effective batch size 
     n_prompts = batch_size 
     input_ids = input_ids[:n_prompts]
     
-    print(f"Shrink to size: {n_prompts}")
+    print(f"REAL (ULTIMATE): Running # of requests = {n_prompts}")
     return [{"input_ids": input_ids}]
-
-    # Pad and divide into batches
-    # n_prompts = len(prompts)
-    # if n_prompts % batch_size != 0:
-    #     input_ids = np.concatenate((input_ids, np.full((batch_size - n_prompts % batch_size,
-    #         input_ids.shape[1]), tokenizer.pad_token_id, dtype=input_ids.dtype)))
-
-    # num_batches = len(input_ids) // batch_size
-    # assert len(input_ids) % batch_size == 0
-    # return [
-    #     {"input_ids": input_ids[i * batch_size: (i+1) * batch_size]}
-    #     for i in range(num_batches)
-    # ]
 
 
 def get_config(model: str, trust_remote_code: bool = True, revision: Optional[str] = None):
@@ -201,9 +191,8 @@ def execute(scenario_state, tokenizer, effective_bs, pad_to_seq_len):
                           effective_bs, pad_to_seq_len=pad_to_seq_len)
 
     # NOTE: only run one effective batch 
-    print(f"Number of batches: {len(batches)}")
     assert len(batches) == 1
-    
+    print(f"REAL (ULTIMATE): max generation tokens = {generation_args['max_new_tokens']}\n")
     # Initialize environment
     gpu = TorchDevice("cuda:0")
     cpu = TorchDevice("cpu")
@@ -414,6 +403,9 @@ def run_entry(description, pad_to_seq_len, args):
     ##### Execute #####
     if pad_to_seq_len is None:
         pad_to_seq_len = adapter.window_service.max_sequence_length - run_spec.adapter_spec.max_tokens + 1
+        print(f"Assign pad_to_seq_len = {pad_to_seq_len}")
+    else:
+        print(f"Use pad_to_seq_len = {pad_to_seq_len}")
     scenario_state = execute(scenario_state, tokenizer, effective_bs, pad_to_seq_len)
 
     ##### Metrics #####
