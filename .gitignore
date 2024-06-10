@@ -40,3 +40,6 @@ experimental/helm/data
 
 # tmp scripts
 today_job.sh
+
+FastMoE
+FastMoE/*

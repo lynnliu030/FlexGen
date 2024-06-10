@@ -126,6 +126,25 @@ class TorchTensor:
         else:
             self.load_from_np(np.load(filename))
 
+    ###### NOTE: DBRX 
+    def dbrx_load_split_from_np(self, np_array, expert_id, shard_id = None, shard_size = None):
+        if shard_id is not None:
+            if self.device.device_type == DeviceType.DISK:
+                self.data[expert_id, shard_id * shard_size:(shard_id + 1) * shard_size] = np_array
+            else:
+                self.data[expert_id, shard_id * shard_size:(shard_id + 1) * shard_size].copy_(torch.from_numpy(np_array))
+        else:
+            if self.device.device_type == DeviceType.DISK:
+                self.data[expert_id] = np_array
+            else:
+                self.data[expert_id].copy_(torch.from_numpy(np_array))
+        
+    
+    def dbrx_load_split_from_np_file(self, filename, expert_id, shard_id = None, shard_size = None):
+        self.dbrx_load_split_from_np(np.load(filename), expert_id, shard_id, shard_size)
+    
+    ######
+    
     def load_split_from_np(self, np_array, expert_id, shard_id = None, shard_size = None):
         if shard_id is not None:
             if self.device.device_type == DeviceType.DISK:
