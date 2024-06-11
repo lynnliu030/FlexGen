@@ -1,9 +1,9 @@
 import argparse
 from itertools import count
 import os
-import pickle
 import traceback 
 from typing import Union, List, Optional
+from tqdm import tqdm
 
 import numpy as np
 import torch
@@ -12,30 +12,44 @@ from transformers import AutoTokenizer
 
 from flexgen.compression import CompressionConfig
 from flexgen.dist_utils import initialize_distributed
-from flexgen.flex_opt import (Policy, InputEmbed, OutputEmbed, SelfAttention,
-                              MLP, TransformerLayer, OptLM, get_filename,
+from flexgen.flex_moe import (Policy, InputEmbed, OutputEmbed, SelfAttention,
+                              TransformerLayer, MoEMLP, get_filename,
                               add_parser_arguments, get_test_inputs,
-                              DUMMY_WEIGHT)
-from flexgen.opt_config import get_opt_config
-from flexgen.pytorch_backend import (TorchDevice, TorchDisk, TorchLink,
+                              get_config, cache_bytes, hidden_bytes,
+                              model_bytes, DUMMY_WEIGHT)
+from flexgen.moe_pytorch_backend import (TorchDevice, TorchDisk, 
     TorchMixedDevice, TorchTensor)
 from flexgen.timer import timers
-from flexgen.utils import (Task, ExecutionEnv, GB, T, ValueHolder,
-    array_1d, array_2d, array_3d, array_4d, str2bool, project_decode_latency)
+from flexgen.utils import (Task, ExecutionEnv, GB, ValueHolder,
+    array_1d, array_2d, array_3d, array_4d, project_decode_latency)
+
+from flexgen.moe_config import download_weights
+from flexgen.flex_moe import MixtralLM
+from transformers import AutoTokenizer, MixtralConfig
+
+#os.environ["NCCL_DEBUG"] = "TRACE" 
 
 
-#os.environ["NCCL_DEBUG"] = "TRACE"
-
-
-class DistOptLM(OptLM):
-    def __init__(self, config, env, path, policy, pipeline_rank,
-                 num_pipeline_stages, comm_device, num_inner_iterations=None,
+class DistMixtralLM(MixtralLM):
+    def __init__(self,
+                 model_name: str,
+                 config: MixtralConfig,
+                 env: ExecutionEnv,
+                 path: str,
+                 policy: Policy,
+                 pipeline_rank, num_pipeline_stages, comm_device,
+                 num_inner_iterations=None,
                  async_comm=False):
         self.config = config
+        # hack dtype
+        self.config.dtype = np.float16
         self.env = env
         self.path = path
         self.policy = policy
-        self.num_gpu_batches = self.policy.num_gpu_batches
+        self.num_gpu_batches = policy.num_gpu_batches
+        self.model_name = model_name
+        
+        # Distributed parameters for pipeline parallelism
         self.pipeline_rank = pipeline_rank
         self.num_pipeline_stages = num_pipeline_stages
         self.num_inner_iterations = num_inner_iterations if num_inner_iterations is not None else num_pipeline_stages
@@ -46,27 +60,43 @@ class DistOptLM(OptLM):
             self.comm_device = self.env.gpu
         else:
             raise ValueError(f"Invalid comm_device: {comm_device}")
-
+        
+        print(f"Number of hidden layers: {self.config.num_hidden_layers}. n_head: {self.config.num_attention_heads}. hidden size: {self.config.hidden_size}. ")
+        print(f"Initializing layers")
         layers = []
-        if pipeline_rank == 0:
-            layers.append(InputEmbed(self.config, self.env, self.policy))
+        
+        if pipeline_rank == 0: 
+            layers.append(InputEmbed(self.config, self.env, self.policy))  
         pipeline_stage_sizes = [config.num_hidden_layers // num_pipeline_stages
                                 + int(i < config.num_hidden_layers % num_pipeline_stages)
                                 for i in range(num_pipeline_stages)]
+        
         layer_start_ids = [0]
         for stage_size in pipeline_stage_sizes:
             layer_start_ids.append(layer_start_ids[-1] + stage_size)
+            
         for i in range(layer_start_ids[pipeline_rank], layer_start_ids[pipeline_rank + 1]):
-            if self.policy.sep_layer:
+            if policy.sep_layer:
                 layers.append(SelfAttention(self.config, self.env, self.policy, i))
-                layers.append(MLP(self.config, self.env, self.policy, i))
+                layers.append(MoEMLP(self.config, self.env, self.policy, i))
             else:
                 layers.append(TransformerLayer(self.config, self.env, self.policy, i))
+                
         if pipeline_rank == num_pipeline_stages - 1:
             layers.append(OutputEmbed(self.config, self.env, self.policy))
+            
+        # for i in range(self.config.num_hidden_layers):
+        #     if policy.sep_layer:
+        #         layers.append(SelfAttention(self.config, self.env, self.policy, i))
+        #         layers.append(MoEMLP(self.config, self.env, self.policy, i))
+        #     else:
+        #         layers.append(TransformerLayer(self.config, self.env, self.policy, i))
+        # layers.append(OutputEmbed(self.config, self.env, self.policy))
+        
         self.layers = layers
         self.num_layers = len(layers)
 
+        print(f"Initializing weights")
         if self.policy.act_gpu_percent == 100:
             self.act_home = self.env.gpu
         elif self.policy.act_cpu_percent == 100:
@@ -81,8 +111,23 @@ class DistOptLM(OptLM):
         self.load_cache_stream = torch.cuda.Stream()
         self.store_cache_stream = torch.cuda.Stream()
 
-        self.task = None
+        self.task = None 
         self.init_all_weights()
+        
+        # Intermediate tensors
+        # The following buffers store values used
+        # for the i-th token, j-th layer, k-th gpu batch.
+        # num_layers, num_gpu_batches = self.num_layers, self.policy.num_gpu_batches
+        
+        # print(f"Initializing weights")
+        # # cache[j][k]
+        # self.cache_home = array_2d(num_layers, num_gpu_batches, ValueHolder)
+        # self.cache_read_buf = array_2d(num_layers, num_gpu_batches, ValueHolder)
+        # self.cache_write_buf = array_2d(num_layers, num_gpu_batches, ValueHolder)
+        # # weight[j]
+        # self.weight_read_buf = array_1d(num_layers, ValueHolder)
+        # # attention_mask[k]
+        # self.attention_mask = array_1d(num_gpu_batches, ValueHolder)
 
     def load_weight(self, b, t, i, j, k):
         # Handle corner cases
@@ -258,7 +303,7 @@ class DistOptLM(OptLM):
         else:
             dist.recv(val_holder.val.data, sender_rank, tag=tag)
             move_value_callback()
-
+            
     def compute_layer(self, t, i, j, k):
         # Update the hidden in place
         # Clear the weight_read_buf if it is the last gpu batch
@@ -414,7 +459,7 @@ class DistOptLM(OptLM):
             for receiving_future, callback in receiving_futures:
                 receiving_future.wait()
                 callback()
-
+                
     def generation_loop_normal(self):
         self.sending_tag = 0
         self.receiving_tag = 0
@@ -527,8 +572,7 @@ class DistOptLM(OptLM):
         if self.num_pipeline_stages > 1:
             self.send_recv_hidden(last_sending_job, None)
             dist.barrier()
-
-
+        
 def comm_test(comm_device):
     # A small all_reduce for warmup.
     a = torch.ones(1).to(comm_device)
@@ -537,8 +581,16 @@ def comm_test(comm_device):
 
 
 def run_flexgen_dist(args):
-    t_name = args.model.replace("175b", "66b")
-    tokenizer = AutoTokenizer.from_pretrained(t_name, padding_side="left")
+    # t_name = args.model.replace("175b", "66b")
+    # tokenizer = AutoTokenizer.from_pretrained(t_name, padding_side="left")
+    
+    print(f"<run_flexgen>: args.model: {args.model}, args.pin_weight: {args.pin_weight}, args.cpu_cache_compute, {args.cpu_cache_compute} ,args.overlap: {args.overlap}")
+    if args.model == "facebook/galactica-30b":
+        tokenizer = AutoTokenizer.from_pretrained("facebook/galactica-30b", padding_side="left")
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(args.model, padding_side="left")
+        tokenizer.pad_token = tokenizer.eos_token
+        
     num_inner_iterations = args.num_inner_iterations if args.num_inner_iterations is not None else args.world_size
     num_prompts = args.num_gpu_batches * args.gpu_batch_size * num_inner_iterations * 1
     prompt_len, gen_len, cut_gen_len = args.prompt_len, args.gen_len, args.cut_gen_len
@@ -567,15 +619,19 @@ def run_flexgen_dist(args):
                     args.compress_cache,
                     CompressionConfig(num_bits=4, group_size=64,
                                       group_dim=2, symmetric=False))
+    
     assert not (args.compress_cache and args.attn_sparsity < 1.0), "Not implemented"
 
-    opt_config = get_opt_config(args.model)
-    model = DistOptLM(opt_config, env, args.path, policy, args.rank,
+    # opt_config = get_opt_config(args.model)
+    mixtral_config = get_config(args.model)
+    mixtral_config.pad_token_id = tokenizer.pad_token_id
+    model = DistMixtralLM(args.model, mixtral_config, env, args.path, policy, args.rank,
                       args.world_size, args.comm_device, num_inner_iterations=num_inner_iterations,
                       async_comm=args.async_comm)
-    cache_size = opt_config.cache_bytes(num_prompts, prompt_len + gen_len)
-    hidden_size = opt_config.hidden_bytes(num_prompts, prompt_len + gen_len)
-    print(f"model size: {opt_config.model_bytes()/GB:.3f} GB, "
+    cache_size = cache_bytes(mixtral_config, num_prompts, prompt_len + gen_len)
+    hidden_size = hidden_bytes(mixtral_config, num_prompts, prompt_len + gen_len)
+    
+    print(f"model size: {model_bytes(mixtral_config)/GB:.3f} GB, "
           f"cache size: {cache_size/GB:.3f} GB, "
           f"hidden size (prefill): {hidden_size/GB:.3f} GB")
 
@@ -625,7 +681,7 @@ def run_flexgen_dist(args):
     cpu.print_stats()
     projected = args.debug_mode or cut_gen_len
 
-    log_str = (f"model size: {opt_config.model_bytes()/GB:.3f} GB\t"
+    log_str = (f"model size: {model_bytes(mixtral_config)/GB:.3f} GB\t"
                f"cache size: {cache_size/GB:.3f} GB\t"
                f"hidden size (prefill): {hidden_size/GB:.3f} GB\n"
                f"peak gpu mem: {gpu_peak_mem / GB:.3f} GB\n"
