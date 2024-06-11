@@ -19,7 +19,7 @@ import numpy as np
 from accelerate import (infer_auto_device_map, init_empty_weights,
     load_checkpoint_and_dispatch)
 from transformers import AutoTokenizer, AutoConfig, AutoModelForCausalLM
-from transformers import OPTForCausalLM
+from transformers import OPTForCausalLM, MixtralForCausalLM
 import torch
 
 from flexgen.timer import timers
@@ -91,6 +91,66 @@ def get_model_config(model_name):
     return config
 
 
+# NOTE: change this to ds_mixtral_model 
+def get_ds_mixtral_model(model_name, dtype, cpu_offload, disk_offload, offload_dir,
+                     dummy_weights):
+    import deepspeed
+    import torch.distributed as dist
+    from transformers.deepspeed import HfDeepSpeedConfig
+
+    config = get_model_config(model_name)
+    hidden_size = config.hidden_size
+    deepspeed.init_distributed("nccl")
+    rank = dist.get_rank()
+    pin_memory = bool(args.pin_memory)
+
+    ds_config = {
+        "fp16": {
+            "enabled": dtype == torch.float16,
+        },
+        "bf16": {
+            "enabled": dtype == torch.bfloat16,
+        },
+        "zero_optimization": {
+            "stage": 3,
+            "stage3_prefetch_bucket_size": hidden_size * hidden_size,
+            "stage3_param_persistence_threshold": 0,
+        },
+        "steps_per_print": 2000,
+        "train_batch_size": args.batch_size,
+        "wall_clock_breakdown": False,
+    }
+
+    if cpu_offload:
+        ds_config["zero_optimization"]["offload_param"] = dict(
+            device="cpu", pin_memory=pin_memory)
+
+    if disk_offload:
+        ds_config["zero_optimization"]["offload_param"] = dict(
+            device="nvme",
+            pin_memory=True,
+            nvme_path=offload_dir,
+            buffer_count=5,
+            buffer_size=2 * GB,
+        )
+        ds_config["aio"] = {
+          "block_size": 1048576,
+          "queue_depth": 8,
+          "thread_count": 1,
+          "single_submit": False,
+          "overlap_events": True,
+        }
+
+    dschf = HfDeepSpeedConfig(ds_config)
+    
+    model = MixtralForCausalLM.from_pretrained(dummy_weights or model_name, torch_dtype=dtype)
+    model = model.eval()
+    ds_engine = deepspeed.initialize(model=model, config_params=ds_config)[0]
+    ds_engine.module.eval()
+    model = ds_engine.module
+
+    return model
+
 def get_ds_opt_model(model_name, dtype, cpu_offload, disk_offload, offload_dir,
                      dummy_weights):
     import deepspeed
@@ -144,6 +204,7 @@ def get_ds_opt_model(model_name, dtype, cpu_offload, disk_offload, offload_dir,
 
     model = OPTForCausalLM.from_pretrained(
         dummy_weights or model_name, torch_dtype=dtype)
+    
     model = model.eval()
     ds_engine = deepspeed.initialize(model=model, config_params=ds_config)[0]
     ds_engine.module.eval()
@@ -154,6 +215,7 @@ def get_ds_opt_model(model_name, dtype, cpu_offload, disk_offload, offload_dir,
 
 def get_hf_opt_model(model_name, dtype, cpu_offload, disk_offload, offload_dir,
                      num_gpus, dummy_weights):
+
     if num_gpus == 1 and dtype != torch.int8:
         # Here we use a custom device_map instead of device_map == "auto"
         # becase we want to offload as many as possible weights out of GPU
@@ -216,7 +278,8 @@ def run_generation(model_name, batch_size, prompt_len, gen_len, cut_gen_len,
     # Load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(
         model_name.replace("175b", "66b"), padding_side="left")
-
+    tokenizer.pad_token = tokenizer.eos_token
+    
     # Load model
     if use_int8:
         dtype = torch.int8
@@ -230,7 +293,9 @@ def run_generation(model_name, batch_size, prompt_len, gen_len, cut_gen_len,
         if not os.path.exists(filename):
             print("create dummy weights")
             with init_empty_weights():
-                model = OPTForCausalLM(config)
+                # model = OPTForCausalLM(config)
+                # NOTE: change to Mixtral model
+                model = MixtralForCausalLM(config)
             model.save_pretrained(filename,
                 state_dict=meta_to_cpu(model.state_dict(), torch.float16))
         dummy_weights = filename
@@ -239,13 +304,17 @@ def run_generation(model_name, batch_size, prompt_len, gen_len, cut_gen_len,
 
     print("load model")
     if use_deepspeed:
-        model = get_ds_opt_model(model_name, dtype, cpu_offload, disk_offload,
+        # TODO: change this to Mixtral model
+        # model = get_ds_opt_model(model_name, dtype, cpu_offload, disk_offload,
+        #     offload_dir, dummy_weights)
+        model = get_ds_mixtral_model(model_name, dtype, cpu_offload, disk_offload,
             offload_dir, dummy_weights)
     else:
         model = get_hf_opt_model(model_name, dtype, cpu_offload, disk_offload,
             offload_dir, num_gpus_per_node, dummy_weights)
 
     # Run generation
+    # NOTE: actual run - need to change this to datasets (MTBench, HELM, etc.)
     execute_gen_len = cut_gen_len if cut_gen_len else gen_len
     if use_deepspeed:
         prompts = ["Paris is the capital city of"] * (batch_size // WORLD_SIZE)
@@ -366,6 +435,7 @@ if __name__ == "__main__":
         num_gpus_per_node = torch.cuda.device_count()
         num_nodes = WORLD_SIZE // num_gpus_per_node
 
+    print(f"Use deepspeed? {use_deepspeed}")
     run_generation(args.model, args.batch_size, args.prompt_len, args.gen_len,
                    args.cut_gen_len, args.cpu_offload, args.disk_offload,
                    os.path.abspath(os.path.expanduser(args.offload_dir)),

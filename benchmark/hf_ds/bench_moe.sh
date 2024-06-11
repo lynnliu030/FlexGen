@@ -1,0 +1,1 @@
+deepspeed --num_nodes 1 --num_gpus 1 hf_moe.py --model mistralai/Mixtral-8x7B-Instruct-v0.1 --batch-size 1 

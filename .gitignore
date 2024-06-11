@@ -43,3 +43,5 @@ today_job.sh
 
 FastMoE
 FastMoE/*
+third_party/updated_deepspeed/*
+third_party/updated_deepspeed
