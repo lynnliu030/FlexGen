@@ -3,7 +3,7 @@
 MY_IPADDR=$(hostname -i)
 all_hosts=$MY_IPADDR
 N_GPUS=2
-N_CORES_PER_GPU=6
+N_CORES_PER_GPU=16
 
 PYTHON_EXEC=$CONDA_PREFIX/bin/python
 PYTHON_SCRIPT=flexgen.dist_flex_moe
