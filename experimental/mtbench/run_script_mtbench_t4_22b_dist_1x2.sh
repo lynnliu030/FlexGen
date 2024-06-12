@@ -72,11 +72,13 @@ run_command() {
 }
 
 run_command "1 99 0 100 0 100" 16 46 32 false "moe_dist_gen32_1_99_0_100_0_100_16_46_1x2.log"
-run_command "1 99 0 100 0 100" 4 182 64 false "moe_dist_gen64_1_99_0_100_0_100_4_182_1x2.log"
-run_command "1 99 0 100 0 100" 8 80 128 false "moe_dist_gen128_1_99_0_100_0_100_8_80_1x2.log"
-run_command "1 99 0 100 0 100" 2 261 256 false "moe_dist_gen256_1_99_0_100_0_100_2_261_1x2.log"
-
 run_command "1 99 0 100 0 100" 16 46 32 true "moe_dist_gen32_1_99_0_100_0_100_16_46_cpu_1x2.log"
-run_command "1 99 0 100 0 100" 8 90 64 true "moe_dist_gen64_1_99_0_100_0_100_8_90_cpu_1x2.log"
-run_command "1 99 0 100 0 100" 3 214 128 true "moe_dist_gen128_1_99_0_100_0_100_3_214_cpu_1x2.log"
-run_command "1 99 0 100 0 100" 4 130 256 true "moe_dist_gen256_1_99_0_100_0_100_4_130_cpu_1x2.log"
+
+run_command "1 99 0 100 0 100" 4 182 64 false "moe_dist_gen64_1_99_0_100_0_100_4_182_1x2.log"
+run_command "1 99 0 100 0 100" 4 182 64 true "moe_dist_gen64_1_99_0_100_0_100_4_182_cpu_1x2.log"
+
+run_command "1 99 0 100 0 100" 8 80 128 false "moe_dist_gen128_1_99_0_100_0_100_8_80_1x2.log"
+run_command "1 99 0 100 0 100" 8 80 128 true "moe_dist_gen128_1_99_0_100_0_100_8_80_cpu_1x2.log"
+
+run_command "1 99 0 100 0 100" 2 261 256 false "moe_dist_gen256_1_99_0_100_0_100_2_261_1x2.log"
+run_command "1 99 0 100 0 100" 2 261 256 true "moe_dist_gen256_1_99_0_100_0_100_2_261_cpu_1x2.log"
