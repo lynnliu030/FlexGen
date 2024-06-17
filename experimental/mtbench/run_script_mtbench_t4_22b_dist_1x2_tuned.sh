@@ -13,7 +13,7 @@
 
 MY_IPADDR=$(hostname -i)
 all_hosts=$MY_IPADDR
-N_GPUS=4
+N_GPUS=2
 N_CORES_PER_GPU=16
 
 PYTHON_EXEC=$CONDA_PREFIX/bin/python
@@ -71,10 +71,22 @@ run_command() {
   fi
 }
 
-run_command "1 99 0 100 0 100" 16 30 32 false "moe_dist_gen32_1_99_0_100_0_100_16_30_1x4.log"
-run_command "1 99 0 100 0 100" 4 105 64 false "moe_dist_gen64_1_99_0_100_0_100_4_105_1x4.log"
-run_command "1 99 0 100 0 100" 8 48 128 false "moe_dist_gen128_1_99_0_100_0_100_8_48_1x4.log"
-run_command "1 99 0 100 0 100" 2 130 256 false "moe_dist_gen256_1_99_0_100_0_100_2_130_1x4.log"
+# run_command "1 99 0 100 0 100" 16 30 32 true "moe_dist_gen32_1_99_0_100_0_100_16_30_cpu_1x2.log"
+# run_command "1 99 0 100 0 100" 16 30 32 false "moe_dist_gen32_1_99_0_100_0_100_16_30_1x2.log"
 
-run_command "1 99 0 100 0 100" 2 182 64 true "moe_dist_gen64_1_99_0_100_0_100_2_182_cpu_1x4.log"
-run_command "1 99 0 100 0 100" 2 110 256 true "moe_dist_gen256_1_99_0_100_0_100_2_110_cpu_1x4.log"
+# run_command "1 99 0 100 0 100" 4 105 64 false "moe_dist_gen64_1_99_0_100_0_100_4_118_1x2.log"
+
+# run_command "1 99 0 100 0 100" 4 105 64 true "moe_dist_gen64_1_99_0_100_0_100_4_118_cpu_1x2.log"
+# run_command "1 99 0 100 0 100" 4 90 64 true "moe_dist_gen64_1_99_0_100_0_100_4_90_cpu_1x2.log" # FAILED
+
+# run_command "1 99 0 100 0 100" 8 40 128 true "moe_dist_gen128_1_99_0_100_0_100_8_40_cpu_1x2.log"
+run_command "1 99 0 100 0 100" 16 15 32 true "moe_dist_gen32_1_99_0_100_0_100_16_15_cpu_1x2.log"
+run_command "1 99 0 100 0 100" 8 30 128 true "moe_dist_gen128_1_99_0_100_0_100_8_30_cpu_1x2.log"
+run_command "1 99 0 100 0 100" 16 20 32 true "moe_dist_gen32_1_99_0_100_0_100_16_20_cpu_1x2.log"
+run_command "1 99 0 100 0 100" 16 15 32 true "moe_dist_gen32_1_99_0_100_0_100_16_15_cpu_1x2.log"
+
+# run_command "1 99 0 100 0 100" 8 48 128 true "moe_dist_gen128_1_99_0_100_0_100_8_48_cpu_1x2.log"
+# run_command "1 99 0 100 0 100" 8 48 128 false "moe_dist_gen128_1_99_0_100_0_100_8_48_1x2.log"
+
+# run_command "1 99 0 100 0 100" 2 130 256 true "moe_dist_gen256_1_99_0_100_0_100_2_130_cpu_1x2.log"
+# run_command "1 99 0 100 0 100" 2 130 256 false "moe_dist_gen256_1_99_0_100_0_100_2_130_1x2.log"

@@ -89,6 +89,14 @@ class CostModelConfig:
     c3: float = 0.0000
 
 
+# NOTE
+# ngb: number of gpu batches 
+#      T (weights) / n --> 0 
+#      Weight transfer time ammortized 
+#      n approaches infinity 
+
+# gbs: gpu batch size
+#      every kernel how to launch 
 
 def solve_lp(config, bls, gbs, compress_w=False, verbose=1, debug=False, percent=None):
     assert bls > 0 and gbs > 0
@@ -256,6 +264,7 @@ def solve_lp(config, bls, gbs, compress_w=False, verbose=1, debug=False, percent
 
     # compg = gpu_compg + cpu_compg
     # non-linear cpu_flops
+    
     cpu_flops_real = cpu_flops * np.maximum(0.1,
             1 + c1 * (max(0, math.log2(256 / gbs)) * max(0, math.log2(4096 / h1)))
             - c2 * max(0, math.log2(256 / gbs))
@@ -294,6 +303,7 @@ def solve_lp(config, bls, gbs, compress_w=False, verbose=1, debug=False, percent
     nvme_peak = pulp.LpVariable("nvme_peak", lowBound=0)
     
     ## GPU peak memory constaints
+    # Prefill GPU peak memory (bls: 2 batch hidden state * ratio, one batch kv cache, all 0s)
     prob += gpu_home_p == wi * l * wg + 2 * s * h1 * bls * hg + 4 * (s + n) * h_kv * bls * l * cg
     prob += interp == 8 * gbs * s * h1 \
                     + gbs * (2 * s * h1 + 2 * nh * s ** 2) \
